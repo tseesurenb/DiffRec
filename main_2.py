@@ -138,8 +138,8 @@ class DataDiffusion(torch.utils.data.Dataset):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='yelp2018', help='choose the dataset')
-parser.add_argument('--train_path', type=str, default='./datasets/data/yelp2018/train_coo.txt', help='path to training data file')
-parser.add_argument('--test_path', type=str, default='./datasets/data/yelp2018/test_coo.txt', help='path to test data file')
+parser.add_argument('--train_path', type=str, default='./data/yelp2018/train_coo.txt', help='path to training data file')
+parser.add_argument('--test_path', type=str, default='./data/yelp2018/test_coo.txt', help='path to test data file')
 parser.add_argument('--validation_ratio', type=float, default=0.2, help='ratio of training data to use as validation')
 parser.add_argument('--lr', type=float, default=0.00001, help='learning rate')
 parser.add_argument('--weight_decay', type=float, default=0.0)

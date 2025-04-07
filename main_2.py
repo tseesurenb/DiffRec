@@ -178,6 +178,8 @@ print("args:", args)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+print("Using device: ", device)
+
 print("Starting time: ", time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
 
 ### DATA LOAD ###

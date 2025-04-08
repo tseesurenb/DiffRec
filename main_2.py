@@ -137,11 +137,11 @@ class DataDiffusion(torch.utils.data.Dataset):
 # "yelp_clean_lr1e-05_wd0.0_bs400_dims[1000]_emb10_x0_steps5_scale0.01_min0.001_max0.01_sample0_reweight0_log.pth"
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default='yelp2018', help='choose the dataset')
-parser.add_argument('--train_path', type=str, default='./data/yelp2018/train_coo.txt', help='path to training data file')
-parser.add_argument('--test_path', type=str, default='./data/yelp2018/test_coo.txt', help='path to test data file')
+parser.add_argument('--dataset', type=str, default='amazon_book', help='choose the dataset')
+parser.add_argument('--train_path', type=str, default='./data/amazon_book/train_coo.txt', help='path to training data file')
+parser.add_argument('--test_path', type=str, default='./data/amazon_book/test_coo.txt', help='path to test data file')
 parser.add_argument('--validation_ratio', type=float, default=0.2, help='ratio of training data to use as validation')
-parser.add_argument('--lr', type=float, default=0.00001, help='learning rate')
+parser.add_argument('--lr', type=float, default=0.00005, help='learning rate')
 parser.add_argument('--weight_decay', type=float, default=0.0)
 parser.add_argument('--batch_size', type=int, default=400)
 parser.add_argument('--epochs', type=int, default=1000, help='upper epoch limit')
@@ -155,17 +155,17 @@ parser.add_argument('--round', type=int, default=1, help='record the experiment'
 
 # params for the model
 parser.add_argument('--time_type', type=str, default='cat', help='cat or add')
-parser.add_argument('--dims', type=str, default='[2000]', help='the dims for the DNN')
+parser.add_argument('--dims', type=str, default='[1000]', help='the dims for the DNN')
 parser.add_argument('--norm', type=bool, default=False, help='Normalize the input or not')
 parser.add_argument('--emb_size', type=int, default=10, help='timestep embedding size')
 
 # params for diffusion
 parser.add_argument('--mean_type', type=str, default='x0', help='MeanType for diffusion: x0, eps')
-parser.add_argument('--steps', type=int, default=10, help='diffusion steps')
+parser.add_argument('--steps', type=int, default=5, help='diffusion steps')
 parser.add_argument('--noise_schedule', type=str, default='linear-var', help='the schedule for noise generating')
-parser.add_argument('--noise_scale', type=float, default=0.01, help='noise scale for noise generating')
-parser.add_argument('--noise_min', type=float, default=0.001, help='noise lower bound for noise generating')
-parser.add_argument('--noise_max', type=float, default=0.01, help='noise upper bound for noise generating')
+parser.add_argument('--noise_scale', type=float, default=0.0001, help='noise scale for noise generating')
+parser.add_argument('--noise_min', type=float, default=0.0005, help='noise lower bound for noise generating')
+parser.add_argument('--noise_max', type=float, default=0.005, help='noise upper bound for noise generating')
 parser.add_argument('--sampling_noise', type=bool, default=False, help='sampling with noise or not')
 parser.add_argument('--sampling_steps', type=int, default=0, help='steps of the forward process during inference')
 parser.add_argument('--reweight', type=bool, default=True, help='assign different weight to different timestep or not')

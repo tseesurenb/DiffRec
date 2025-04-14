@@ -168,7 +168,7 @@ print(f"Test interactions: {test_y_data.sum()}")
 #item_counts_matrix, co_counts_matrix = calculate_enhanced_interaction_features(train_data)
 item_counts_matrix, co_counts_matrix = calculate_enhanced_interaction_features_batched(train_data)
 
-item_counts_matrix, co_counts_matrix = calculate_enhanced_interaction_features_batched_topk(train_data, batch_size=5000, k=100)
+item_counts_matrix, co_counts_matrix = calculate_enhanced_interaction_features_batched_topk(train_data, batch_size=1000, k=100)
 
 print("Converting to tensors...")
 # Convert to tensor format for the dataset

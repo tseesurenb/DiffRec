@@ -147,7 +147,10 @@ def calculate_ultra_memory_efficient(train_data, batch_size=100, k=100, candidat
                         co_counts += sim_val * train_csr[sim_idx]
                 
                 # Normalize co-counts
-                max_val = co_counts.max()
+                #max_val = co_counts.max()
+                
+                max_val = co_counts.tocsr().max()
+                
                 if max_val > 0:
                     co_counts = co_counts / max_val
                 

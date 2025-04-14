@@ -12,6 +12,11 @@ def data_load(train_path, valid_path, test_path):
     train_list = np.load(train_path, allow_pickle=True)
     valid_list = np.load(valid_path, allow_pickle=True)
     test_list = np.load(test_path, allow_pickle=True)
+    
+    print(f"loading data: {train_path}, {valid_path}, {test_path}")
+    print(f"train data size: {train_list.shape}")
+    print(f"valid data size: {valid_list.shape}")
+    print(f"test data size: {test_list.shape}")
 
     uid_max = 0
     iid_max = 0

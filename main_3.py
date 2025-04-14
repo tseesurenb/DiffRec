@@ -19,7 +19,7 @@ import scipy.sparse as sp
 
 import models.gaussian_diffusion as gd
 from models.enhanced_dnn_model import EnhancedDNN
-from enhanced_interaction_features import calculate_enhanced_interaction_features, EnhancedInteractionDataset, calculate_enhanced_interaction_features_batched, calculate_enhanced_interaction_features_batched_topk
+from enhanced_interaction_features import calculate_enhanced_interaction_features, EnhancedInteractionDataset, calculate_enhanced_interaction_features_batched, calculate_enhanced_interaction_features_batched_topk, calculate_ultra_memory_efficient
 import evaluate_utils
 import data_utils
 from copy import deepcopy
@@ -74,45 +74,10 @@ def seed_worker(worker_id):
 
 # "yelp_clean_lr1e-05_wd0.0_bs400_dims[1000]_emb10_x0_steps5_scale0.01_min0.001_max0.01_sample0_reweight0_log.pth"
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default='yelp_clean', help='choose the dataset')
-parser.add_argument('--data_path', type=str, default='./data/', help='load data path')
-parser.add_argument('--lr', type=float, default=0.00001, help='learning rate')
-parser.add_argument('--weight_decay', type=float, default=0.0)
-parser.add_argument('--batch_size', type=int, default=400)
-parser.add_argument('--epochs', type=int, default=1000, help='upper epoch limit')
-parser.add_argument('--topN', type=str, default='[10, 20]')
-parser.add_argument('--tst_w_val', action='store_true', help='test with validation')
-parser.add_argument('--cuda', action='store_true', help='use CUDA')
-parser.add_argument('--gpu', type=str, default='0', help='gpu card ID')
-parser.add_argument('--save_path', type=str, default='./saved_models/', help='save model path')
-parser.add_argument('--log_name', type=str, default='log', help='the log name')
-parser.add_argument('--round', type=int, default=1, help='record the experiment')
-
-# params for the model
-parser.add_argument('--time_type', type=str, default='cat', help='cat or add')
-parser.add_argument('--dims', type=str, default='[1000]', help='the dims for the DNN')
-parser.add_argument('--norm', type=bool, default=False, help='Normalize the input or not')
-parser.add_argument('--emb_size', type=int, default=10, help='timestep embedding size')
-
-# params for diffusion
-parser.add_argument('--mean_type', type=str, default='x0', help='MeanType for diffusion: x0, eps')
-parser.add_argument('--steps', type=int, default=10, help='diffusion steps')
-parser.add_argument('--noise_schedule', type=str, default='linear-var', help='the schedule for noise generating')
-parser.add_argument('--noise_scale', type=float, default=0.01, help='noise scale for noise generating')
-parser.add_argument('--noise_min', type=float, default=0.001, help='noise lower bound for noise generating')
-parser.add_argument('--noise_max', type=float, default=0.01, help='noise upper bound for noise generating')
-parser.add_argument('--sampling_noise', type=bool, default=False, help='sampling with noise or not')
-parser.add_argument('--sampling_steps', type=int, default=0, help='steps of the forward process during inference')
-parser.add_argument('--reweight', type=bool, default=True, help='assign different weight to different timestep or not')
-
-
-# ml-1m_clean_lr0.001_wd0.0_bs400_dims[200,600]_emb10_x0_steps40_scale0.005_min0.005_max0.01_sample0_reweight1_log.pth
-
 # parser = argparse.ArgumentParser()
-# parser.add_argument('--dataset', type=str, default='ml-1m_clean', help='choose the dataset')
+# parser.add_argument('--dataset', type=str, default='yelp_clean', help='choose the dataset')
 # parser.add_argument('--data_path', type=str, default='./data/', help='load data path')
-# parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+# parser.add_argument('--lr', type=float, default=0.00001, help='learning rate')
 # parser.add_argument('--weight_decay', type=float, default=0.0)
 # parser.add_argument('--batch_size', type=int, default=400)
 # parser.add_argument('--epochs', type=int, default=1000, help='upper epoch limit')
@@ -126,20 +91,55 @@ parser.add_argument('--reweight', type=bool, default=True, help='assign differen
 
 # # params for the model
 # parser.add_argument('--time_type', type=str, default='cat', help='cat or add')
-# parser.add_argument('--dims', type=str, default='[200, 600]', help='the dims for the DNN')
+# parser.add_argument('--dims', type=str, default='[1000]', help='the dims for the DNN')
 # parser.add_argument('--norm', type=bool, default=False, help='Normalize the input or not')
 # parser.add_argument('--emb_size', type=int, default=10, help='timestep embedding size')
 
 # # params for diffusion
 # parser.add_argument('--mean_type', type=str, default='x0', help='MeanType for diffusion: x0, eps')
-# parser.add_argument('--steps', type=int, default=40, help='diffusion steps')
+# parser.add_argument('--steps', type=int, default=10, help='diffusion steps')
 # parser.add_argument('--noise_schedule', type=str, default='linear-var', help='the schedule for noise generating')
-# parser.add_argument('--noise_scale', type=float, default=0.005, help='noise scale for noise generating')
-# parser.add_argument('--noise_min', type=float, default=0.005, help='noise lower bound for noise generating')
+# parser.add_argument('--noise_scale', type=float, default=0.01, help='noise scale for noise generating')
+# parser.add_argument('--noise_min', type=float, default=0.001, help='noise lower bound for noise generating')
 # parser.add_argument('--noise_max', type=float, default=0.01, help='noise upper bound for noise generating')
 # parser.add_argument('--sampling_noise', type=bool, default=False, help='sampling with noise or not')
 # parser.add_argument('--sampling_steps', type=int, default=0, help='steps of the forward process during inference')
 # parser.add_argument('--reweight', type=bool, default=True, help='assign different weight to different timestep or not')
+
+
+# ml-1m_clean_lr0.001_wd0.0_bs400_dims[200,600]_emb10_x0_steps40_scale0.005_min0.005_max0.01_sample0_reweight1_log.pth
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--dataset', type=str, default='ml-1m_clean', help='choose the dataset')
+parser.add_argument('--data_path', type=str, default='./data/', help='load data path')
+parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument('--weight_decay', type=float, default=0.0)
+parser.add_argument('--batch_size', type=int, default=400)
+parser.add_argument('--epochs', type=int, default=1000, help='upper epoch limit')
+parser.add_argument('--topN', type=str, default='[10, 20]')
+parser.add_argument('--tst_w_val', action='store_true', help='test with validation')
+parser.add_argument('--cuda', action='store_true', help='use CUDA')
+parser.add_argument('--gpu', type=str, default='0', help='gpu card ID')
+parser.add_argument('--save_path', type=str, default='./saved_models/', help='save model path')
+parser.add_argument('--log_name', type=str, default='log', help='the log name')
+parser.add_argument('--round', type=int, default=1, help='record the experiment')
+
+# params for the model
+parser.add_argument('--time_type', type=str, default='cat', help='cat or add')
+parser.add_argument('--dims', type=str, default='[200, 600]', help='the dims for the DNN')
+parser.add_argument('--norm', type=bool, default=False, help='Normalize the input or not')
+parser.add_argument('--emb_size', type=int, default=10, help='timestep embedding size')
+
+# params for diffusion
+parser.add_argument('--mean_type', type=str, default='x0', help='MeanType for diffusion: x0, eps')
+parser.add_argument('--steps', type=int, default=40, help='diffusion steps')
+parser.add_argument('--noise_schedule', type=str, default='linear-var', help='the schedule for noise generating')
+parser.add_argument('--noise_scale', type=float, default=0.005, help='noise scale for noise generating')
+parser.add_argument('--noise_min', type=float, default=0.005, help='noise lower bound for noise generating')
+parser.add_argument('--noise_max', type=float, default=0.01, help='noise upper bound for noise generating')
+parser.add_argument('--sampling_noise', type=bool, default=False, help='sampling with noise or not')
+parser.add_argument('--sampling_steps', type=int, default=0, help='steps of the forward process during inference')
+parser.add_argument('--reweight', type=bool, default=True, help='assign different weight to different timestep or not')
 
 
 args = parser.parse_args()
@@ -166,9 +166,18 @@ print(f"Test interactions: {test_y_data.sum()}")
 
 # Calculate enhanced interaction features for training data
 #item_counts_matrix, co_counts_matrix = calculate_enhanced_interaction_features(train_data)
-item_counts_matrix, co_counts_matrix = calculate_enhanced_interaction_features_batched(train_data)
+#item_counts_matrix, co_counts_matrix = calculate_enhanced_interaction_features_batched(train_data)
 
-item_counts_matrix, co_counts_matrix = calculate_enhanced_interaction_features_batched_topk(train_data, batch_size=1000, k=100)
+#item_counts_matrix, co_counts_matrix = calculate_enhanced_interaction_features_batched_topk(train_data, batch_size=1000, k=1)
+
+# Use disk-based processing for Yelp dataset
+item_counts, co_interaction_counts = calculate_ultra_memory_efficient(
+    train_data,
+    batch_size=500,            # Smaller batch size
+    k=50,                     # Consider fewer similar users
+    candidate_pool_size=2000, # Compare with fewer candidate users
+    output_dir="./temp_co_counts"  # Save to disk
+)
 
 print("Converting to tensors...")
 # Convert to tensor format for the dataset

@@ -4,6 +4,222 @@ import torch
 from collections import defaultdict
 from tqdm import tqdm
 
+import numpy as np
+import scipy.sparse as sp
+import torch
+from collections import defaultdict
+from tqdm import tqdm
+import os
+import psutil
+import gc
+
+def log_memory_usage(message):
+    """Log current memory usage with a message."""
+    process = psutil.Process(os.getpid())
+    mem = process.memory_info().rss / 1024 / 1024  # in MB
+    print(f"Memory usage ({message}): {mem:.2f} MB")
+
+def calculate_ultra_memory_efficient(train_data, batch_size=100, k=100, candidate_pool_size=5000, output_dir=None):
+    """
+    Ultra memory-efficient calculation of enhanced interaction features.
+    
+    Args:
+        train_data: Sparse matrix of user-item interactions (n_users x n_items)
+        batch_size: Number of users to process at once
+        k: Number of most similar users to consider for each user
+        candidate_pool_size: Number of random users to sample for similarity calculation
+        output_dir: Directory to save intermediate results (if None, don't save to disk)
+        
+    Returns:
+        item_counts: Matrix of item interaction counts (n_users x n_items)
+        co_interaction_counts: Matrix of co-interaction counts (n_users x n_items)
+    """
+    print(f"Calculating ultra memory-efficient interaction features...")
+    log_memory_usage("start")
+    
+    n_users, n_items = train_data.shape
+    
+    # 1. Item interaction counts
+    print("Computing item interaction counts...")
+    item_counts_vec = np.array(train_data.sum(axis=0)).flatten()
+    item_counts = np.tile(item_counts_vec, (n_users, 1))
+    log_memory_usage("after item counts")
+    
+    # 2. Calculate co-interaction counts in batches
+    print("Computing co-interaction counts in small batches...")
+    
+    # Convert to CSR for efficient operations
+    train_csr = train_data.tocsr()
+    
+    # Calculate the number of items each user has interacted with
+    user_item_counts = np.array(train_csr.sum(axis=1)).flatten()
+    
+    # Initialize lists to build CSR matrix directly
+    all_data = []
+    all_indices = []
+    all_indptrs = [0]
+    current_ptr = 0
+    
+    # Process users in batches to reduce memory usage
+    num_batches = (n_users + batch_size - 1) // batch_size
+    
+    # Pre-generate random candidate pools for each batch
+    # This limits similarity computation to a smaller set of users
+    print("Generating candidate user pools...")
+    all_users = np.arange(n_users)
+    candidate_pools = {}
+    
+    for batch_idx in range(num_batches):
+        if candidate_pool_size < n_users:
+            # Randomly sample users for the candidate pool
+            candidate_pools[batch_idx] = np.random.choice(
+                all_users, size=min(candidate_pool_size, n_users), replace=False
+            )
+        else:
+            # Use all users if candidate_pool_size >= n_users
+            candidate_pools[batch_idx] = all_users
+            
+    # Process each batch
+    for batch_idx in tqdm(range(num_batches), desc="Processing user batches"):
+        start_idx = batch_idx * batch_size
+        end_idx = min((batch_idx + 1) * batch_size, n_users)
+        
+        batch_users = list(range(start_idx, end_idx))
+        batch_data = []
+        batch_indices = []
+        batch_indptrs = [0]
+        batch_ptr = 0
+        
+        # Get candidate pool for this batch
+        candidate_pool = candidate_pools[batch_idx]
+        
+        # Process each user in the batch
+        for user_idx in batch_users:
+            # Get user interactions as sparse vector to save memory
+            user_interactions_sparse = train_csr[user_idx]
+            
+            if user_interactions_sparse.nnz == 0:
+                # No interactions for this user
+                batch_indptrs.append(batch_ptr)
+                continue
+            
+            # Calculate similarities only with users in the candidate pool
+            # This dramatically reduces memory usage
+            pool_interactions = train_csr[candidate_pool]
+            
+            # Get intersection sizes via dot product (sparse operation)
+            intersection_sizes = pool_interactions.dot(user_interactions_sparse.T)
+            
+            # Get user item count
+            user_count = user_item_counts[user_idx]
+            
+            # Get item counts for candidate pool users
+            pool_counts = user_item_counts[candidate_pool]
+            
+            # Calculate union sizes
+            union_sizes = user_count + pool_counts - np.array(intersection_sizes.todense()).flatten()
+            
+            # Calculate Jaccard similarities
+            jaccard_similarities = np.zeros(len(candidate_pool))
+            nonzero_indices = np.where(union_sizes > 0)[0]
+            jaccard_similarities[nonzero_indices] = np.array(
+                intersection_sizes[nonzero_indices].todense()
+            ).flatten() / union_sizes[nonzero_indices]
+            
+            # Find top-k similar users from the candidate pool
+            if k < len(candidate_pool):
+                top_k_pool_indices = np.argsort(jaccard_similarities)[-k:]
+                top_k_user_indices = candidate_pool[top_k_pool_indices]
+                top_k_similarities = jaccard_similarities[top_k_pool_indices]
+            else:
+                positive_indices = np.where(jaccard_similarities > 0)[0]
+                top_k_user_indices = candidate_pool[positive_indices]
+                top_k_similarities = jaccard_similarities[positive_indices]
+            
+            if len(top_k_user_indices) > 0:
+                # Initialize co-counts vector as sparse to save memory
+                co_counts = sp.lil_matrix((1, n_items), dtype=np.float32)
+                
+                # Sum contributions from similar users
+                for sim_idx, sim_val in zip(top_k_user_indices, top_k_similarities):
+                    # Only contribute if similarity is positive
+                    if sim_val > 0:
+                        co_counts += sim_val * train_csr[sim_idx]
+                
+                # Normalize co-counts
+                max_val = co_counts.max()
+                if max_val > 0:
+                    co_counts = co_counts / max_val
+                
+                # Add to CSR components
+                co_counts_coo = co_counts.tocoo()
+                
+                batch_data.extend(co_counts_coo.data)
+                batch_indices.extend(co_counts_coo.col)
+                batch_ptr += len(co_counts_coo.data)
+            
+            batch_indptrs.append(batch_ptr)
+            
+            # Manually trigger garbage collection periodically
+            if (user_idx - start_idx) % 10 == 0:
+                gc.collect()
+        
+        # Save batch results to disk if output_dir is provided
+        if output_dir is not None:
+            os.makedirs(output_dir, exist_ok=True)
+            batch_file = os.path.join(output_dir, f"batch_{batch_idx}.npz")
+            sp.save_npz(
+                batch_file, 
+                sp.csr_matrix(
+                    (batch_data, batch_indices, batch_indptrs),
+                    shape=(len(batch_users), n_items)
+                )
+            )
+            print(f"Saved batch {batch_idx} to {batch_file}")
+            
+            # If saving to disk, we don't need to keep these in memory
+            all_data.extend(batch_data)
+            all_indices.extend(batch_indices)
+            all_indptrs.extend([i + current_ptr for i in batch_indptrs[1:]])
+            current_ptr += batch_ptr
+        else:
+            # Keep results in memory
+            all_data.extend(batch_data)
+            all_indices.extend(batch_indices)
+            all_indptrs.extend([i + current_ptr for i in batch_indptrs[1:]])
+            current_ptr += batch_ptr
+        
+        # Force garbage collection after each batch
+        gc.collect()
+        log_memory_usage(f"after batch {batch_idx}")
+    
+    # If we saved to disk, load and combine results
+    if output_dir is not None:
+        print("Loading batches from disk and combining...")
+        co_interaction_counts = sp.csr_matrix((n_users, n_items), dtype=np.float32)
+        
+        for batch_idx in range(num_batches):
+            batch_file = os.path.join(output_dir, f"batch_{batch_idx}.npz")
+            batch_matrix = sp.load_npz(batch_file)
+            
+            start_idx = batch_idx * batch_size
+            end_idx = min((batch_idx + 1) * batch_size, n_users)
+            co_interaction_counts[start_idx:end_idx] = batch_matrix
+            
+            # Delete file after loading to free disk space
+            os.remove(batch_file)
+    else:
+        # Construct CSR matrix directly from memory
+        print("Building final CSR matrix...")
+        co_interaction_counts = sp.csr_matrix(
+            (all_data, all_indices, all_indptrs),
+            shape=(n_users, n_items)
+        )
+    
+    log_memory_usage("final")
+    print("Enhanced interaction features calculation complete!")
+    return item_counts, co_interaction_counts
+
 def calculate_enhanced_interaction_features_batched_topk(train_data, batch_size=1000, k=100):
     """
     Calculate enhanced interaction features using a batched approach with only top-k similar users.
